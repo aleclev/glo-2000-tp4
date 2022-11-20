@@ -79,7 +79,7 @@ class EmailContentPayload(TypedDict, total=True):
 
 class EmailListPayload(TypedDict, total=True):
     """Payload pour les consulation de courriel."""
-    email_list: list[str]
+    email_list: "list[str]"
 
 
 class EmailChoicePayload(TypedDict, total=True):
