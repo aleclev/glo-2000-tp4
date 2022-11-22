@@ -35,10 +35,16 @@ class Server:
 
         S'assure que les dossiers de données du serveur existent.
         """
-        # self._server_socket
-        # self._client_socs
-        # self._logged_users
-        # ...
+        self._server_socket = self._make_socket()
+        self._client_socs = []
+        self._logged_users = []
+
+    def _make_socket(self):
+        soc = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        soc.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        soc.bind(("127.0.0.1", gloutils.APP_PORT))
+        soc.listen()
+        return soc
 
     def cleanup(self) -> None:
         """Ferme toutes les connexions résiduelles."""
@@ -119,14 +125,31 @@ class Server:
         """
         return gloutils.GloMessage()
 
+    def _dispatch(self, message: gloutils.GloMessage, socket: glosocket.socket):
+        if message.header == gloutils.Headers.AUTH_LOGIN:
+            pass
+        if message.header == gloutils.Headers.AUTH_LOGOUT:
+            pass
+        if message.header == gloutils.Headers.AUTH_REGISTER:
+            pass
+        if message.header == gloutils.Headers.EMAIL_SENDING:
+            pass
+        if message.header == gloutils.Headers.ERROR:
+            pass
+        if message.header == gloutils.Headers.INBOX_READING_CHOICE:
+            pass
+
     def run(self):
         """Point d'entrée du serveur."""
-        waiters = []
+        waiters = [self._server_socket]
         while True:
             # Select readable sockets
-            for waiter in waiters:
-                # Handle sockets
-                pass
+            result = select.select(waiters, [], [])
+            readable_sockets = result[0]
+            for waiter in readable_sockets:
+                raw = glosocket.recv_msg(waiter)
+                message = json.loads(raw)
+                self._dispatch(message, waiter)
 
 
 def _main() -> int:

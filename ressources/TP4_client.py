@@ -50,7 +50,7 @@ class Client:
         self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self._socket.bind((destination, gloutils.APP_PORT))
-        self._socket.listen(1)
+        self._socket.listen()
 
     def _register(self) -> None:
         """
