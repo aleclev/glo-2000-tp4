@@ -182,7 +182,39 @@ class Server:
 
         Une absence de courriel n'est pas une erreur, mais une liste vide.
         """
-        return gloutils.GloMessage()
+
+        try:
+            username = self._logged_users[id(client_soc)]
+        except:
+            return self._get_error_message("Utilisateur invalide")
+        
+        email_list = self._get_client_emails_as_json_list(username=username)
+
+        subject_display_list = []
+
+        for i in range(0, len(email_list)):
+            subject = email_list[i]["subject"]
+            sender = email_list[i]["sender"]
+            date = email_list[i]["date"]
+            subject_display_list.append(gloutils.SUBJECT_DISPLAY.format(number=i+1, subject=subject, sender=sender, date=date))
+
+        header = gloutils.Headers.OK
+        payload = gloutils.EmailListPayload(email_list=json.dumps(subject_display_list))
+        message = gloutils.GloMessage(header=header, payload=payload)
+
+        return message
+
+    def _get_client_emails_as_json_list(self, username: str) -> list:
+        path = pathlib.Path.cwd() / gloutils.SERVER_DATA_DIR / username.lower()
+        email_file_list = [f for f in path.iterdir() if f.name != gloutils.PASSWORD_FILENAME]
+        email_list = []
+
+        for file in email_file_list:
+            with open(file, 'r') as email_file:
+                email_list.append(json.loads(email_file.read()))
+        
+        email_list.reverse()
+        return email_list
 
     def _get_email(self, client_soc: socket.socket,
                    payload: gloutils.EmailChoicePayload
@@ -191,7 +223,29 @@ class Server:
         Récupère le contenu de l'email dans le dossier de l'utilisateur associé
         au socket.
         """
-        return gloutils.GloMessage()
+
+        try:
+            username = self._logged_users[id(client_soc)]
+        except:
+            return self._get_error_message("Invalid socket.")
+
+        email_list = self._get_client_emails_as_json_list(username=username)
+
+        index = int(payload["choice"]) - 1
+
+        email_to_send = email_list[index]
+
+        payload = gloutils.EmailContentPayload(
+            sender=email_to_send["sender"],
+            destination=email_to_send["destination"],
+            subject=email_to_send["subject"],
+            date=email_to_send["date"],
+            content=email_to_send["content"]
+        )
+
+        header = gloutils.Headers.OK
+
+        return gloutils.GloMessage(payload=payload, header=header)
 
     def _get_stats(self, client_soc: socket.socket) -> gloutils.GloMessage:
         """
@@ -206,7 +260,7 @@ class Server:
 
         path = pathlib.Path.cwd() / gloutils.SERVER_DATA_DIR / username.lower()
 
-        number_of_mail = len([f for f in path.iterdir() if f.name != gloutils.PASSWORD_FILENAME])
+        number_of_mail = self._get_number_of_mail_for_user(username)
         size = sum(file.stat().st_size for file in path.rglob('*'))
 
         header = gloutils.Headers.OK
@@ -232,9 +286,6 @@ class Server:
         subject = payload["subject"]
         date = payload["date"]
         content = payload["content"]
-        hasher = hashlib.sha3_512()
-        hasher.update(json.dumps(payload).encode("utf-8"))
-        hashed_payload = hasher.hexdigest()
 
         if destination.endswith("@glo2000.ca"):
             #interne
@@ -244,16 +295,17 @@ class Server:
                 if x.is_dir() and x.name + '@glo2000.ca' == destination.lower():
                     found_user = x.name
                     break
+
+            if not found_user:
+                found_user = gloutils.SERVER_LOST_DIR
+            
+
             if found_user:
-                path = path / found_user.lower() / str(hashed_payload)
+                new_file_number = self._get_number_of_mail_for_user(found_user) + 1
+                path = path / found_user.lower() / str(new_file_number)
                 path.touch()
                 path.write_text(json.dumps(payload))
                 return gloutils.GloMessage(header=gloutils.Headers.OK, payload=None)
-            else:
-                path = path / gloutils.SERVER_LOST_DIR / str(hashed_payload)
-                path.touch()
-                path.write_text(json.dumps(payload))
-                return self._get_error_message("Le destinataire n'existe pas.")
 
         else:
             #extrerne
@@ -269,9 +321,10 @@ class Server:
                     return gloutils.GloMessage(header=gloutils.Headers.OK, payload=None)
             except smtplib.SMTPException:
                 return self._get_error_message("Échec de l'envoie du courriel.")
-
-
-        return gloutils.GloMessage()
+    
+    def _get_number_of_mail_for_user(self, username: str) -> int:
+        path = pathlib.Path.cwd() / gloutils.SERVER_DATA_DIR / username.lower()
+        return len([f for f in path.iterdir() if f.name != gloutils.PASSWORD_FILENAME])
 
     def _dispatch(self, message: gloutils.GloMessage, socket: glosocket.socket):
         
@@ -280,7 +333,7 @@ class Server:
         if message["header"] == gloutils.Headers.AUTH_LOGIN:
             response = self._login(socket, message["payload"])
         elif message["header"] == gloutils.Headers.AUTH_LOGOUT:
-            response = self._logout(socket)
+            return self._logout(socket)
         elif message["header"] == gloutils.Headers.AUTH_REGISTER:
             response = self._create_account(socket, message["payload"])
         elif message["header"] == gloutils.Headers.EMAIL_SENDING:
@@ -288,7 +341,11 @@ class Server:
         elif message["header"] == gloutils.Headers.BYE:
             return # No response
         elif message["header"] == gloutils.Headers.STATS_REQUEST:
-            return self._get_stats(client_soc=socket)
+            response = self._get_stats(client_soc=socket)
+        elif message["header"] == gloutils.Headers.INBOX_READING_REQUEST:
+            response = self._get_email_list(socket)      
+        elif message["header"] == gloutils.Headers.INBOX_READING_CHOICE:
+            response = self._get_email(socket, message["payload"])
 
         raw = json.dumps(response)
         glosocket.send_msg(socket, message=raw)

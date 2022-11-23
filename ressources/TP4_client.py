@@ -50,6 +50,16 @@ class Client:
         self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._socket.connect((destination, gloutils.APP_PORT))
 
+    def _message_contains_error(self, message: gloutils.GloMessage) -> bool:
+        if message["header"] == gloutils.Headers.ERROR:
+            print(message["payload"]["error_message"])
+            return True
+        else:
+            return False
+    
+    def _message_is_ok(self, message: gloutils.GloMessage) -> bool:
+        return message["header"] == gloutils.Headers.OK
+
     def _register(self) -> None:
         """
         Demande un nom d'utilisateur et un mot de passe et les transmet au
@@ -60,21 +70,17 @@ class Client:
         """
         username, password = self._get_username_password()
 
-        #TODO : vérification d'erreur
-
         self._username = username
         payload = gloutils.AuthPayload(username=username, password=password)
         message = gloutils.GloMessage(header=gloutils.Headers.AUTH_REGISTER, payload=payload)
 
         message_rec = self._exchange_to_server(message=message)
 
-        if message_rec["header"] == gloutils.Headers.ERROR:
-            print(message_rec["payload"]["error_message"])
-        elif message_rec["header"] == gloutils.Headers.OK:
+        if self._message_contains_error(message_rec):
+            return
+        elif self._message_is_ok(message_rec):
             self._username = username
             print("Connexion réussie !")
-        else:
-            print("Erreur dans le traitement du message reçu.")
 
     def _login(self) -> None:
         """
@@ -92,9 +98,9 @@ class Client:
 
         message_rec = self._exchange_to_server(message)
 
-        if message_rec["header"] == gloutils.Headers.ERROR:
-            print(message_rec['payload']["error_message"])
-        elif message_rec["header"] == gloutils.Headers.OK:
+        if self._message_contains_error(message_rec):
+            return
+        elif self._message_is_ok(message_rec):
             self._username = username
         else:
             print("Erreur dans le traitement du message reçu.")
@@ -127,34 +133,39 @@ class Client:
         message = gloutils.GloMessage(header=gloutils.Headers.INBOX_READING_REQUEST, payload=None)
         message_rec = self._exchange_to_server(message)
 
-        email_subjects = message_rec.payload.email_list
+        if self._message_contains_error(message_rec):
+            return
 
-        if email_subjects.count == 0:
+        email_subjects_string = message_rec["payload"]["email_list"]
+
+        email_subjects = json.loads(email_subjects_string)
+
+        if len(email_subjects) == 0:
             print("Aucun email dans la boîte. Retour au menu principal.")
             return
 
         else:
-            for number in range(0, email_subjects.count):
-                subject = email_subjects[number]
-                sender = subject.sender
-                subject = subject.subject
-                date = subject.date
-                print(gloutils.SUBJECT_DISPLAY), print()
+            for subject in email_subjects:
+                print(subject)
         
-        choice = input("Veuillez entrer votre choix:")
+        choice = self._get_input_number_between(1, len(email_subjects))
 
         payload = gloutils.EmailChoicePayload(choice=choice)
         message = gloutils.GloMessage(header=gloutils.Headers.INBOX_READING_CHOICE, payload=payload)
 
         message_rec = self._exchange_to_server(message=message)
 
-        payload = message_rec.payload
-        sender = payload.sender
-        to = payload.to
-        subject = payload.subject 
-        date = payload.date
-        body = payload.body
-        print(gloutils.EMAIL_DISPLAY)
+        if self._message_contains_error(message_rec):
+            return
+
+        payload = message_rec["payload"]
+        sender = payload["sender"]
+        to = payload["destination"]
+        subject = payload["subject"] 
+        date = payload["date"]
+        body = payload["content"]
+
+        print(gloutils.EMAIL_DISPLAY.format(sender=sender, to=to, subject=subject, date=date, body=body))
 
 
     def _send_email(self) -> None:
@@ -216,7 +227,7 @@ class Client:
         count = payload["count"]
         size = payload["size"]
 
-        print(gloutils.STATS_DISPLAY)
+        print(gloutils.STATS_DISPLAY.format(count=count, size=size))
 
     def _logout(self) -> None:
         """
@@ -244,8 +255,9 @@ class Client:
 
     def _authentication_menu(self) -> bool:
         """Returns true if the program should quit."""
-        print(f"Connecté à {self._username}")
+        print(20*"-")
         print(gloutils.CLIENT_AUTH_CHOICE)
+        print(20*"-")
 
         choice = self._get_input_number_between(min=1, max=3)
         
@@ -259,7 +271,13 @@ class Client:
         return False
 
     def _main_menu(self):
+        
+        print()
+        print()
+        print(f"Connecté à {self._username}")
+        print()
         print(gloutils.CLIENT_USE_CHOICE)
+        print()
 
         choice = self._get_input_number_between(1, 4)
         
