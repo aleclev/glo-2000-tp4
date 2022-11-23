@@ -212,9 +212,9 @@ class Client:
         message = gloutils.GloMessage(header=gloutils.Headers.STATS_REQUEST, payload=None)
         message_rec = self._exchange_to_server(message=message)
 
-        payload = message_rec.payload
-        count = payload.count
-        size = payload.size
+        payload = message_rec["payload"]
+        count = payload["count"]
+        size = payload["size"]
 
         print(gloutils.STATS_DISPLAY)
 
