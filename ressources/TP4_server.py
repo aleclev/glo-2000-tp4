@@ -37,12 +37,15 @@ class Server:
 
         S'assure que les dossiers de données du serveur existent.
         """
-        self._server_socket = self._make_socket()
-        self._client_socs = []
-        self._logged_users = {}
+        try:
+            self._server_socket = self._make_socket()
+            self._client_socs = []
+            self._logged_users = {}
 
-        path = pathlib.Path.cwd() / gloutils.SERVER_DATA_DIR / gloutils.SERVER_LOST_DIR
-        path.mkdir(parents=True, exist_ok=True)
+            path = pathlib.Path.cwd() / gloutils.SERVER_DATA_DIR / gloutils.SERVER_LOST_DIR
+            path.mkdir(parents=True, exist_ok=True)
+        except:
+            sys.exit(-1)
 
     def _make_socket(self):
         soc = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -100,8 +103,7 @@ class Server:
 
         for x in path.iterdir(): 
             if x.is_dir() and x.name == username.lower():
-                #error
-                return
+                return self._get_error_message("Le nom d'utilisateur est déjà pris.")
         
         path = path / username.lower()
 
@@ -305,6 +307,8 @@ class Server:
                 path = path / found_user.lower() / str(new_file_number)
                 path.touch()
                 path.write_text(json.dumps(payload))
+                if found_user == gloutils.SERVER_LOST_DIR:
+                    return self._get_error_message("Le destinataire n'existe pas.")
                 return gloutils.GloMessage(header=gloutils.Headers.OK, payload=None)
 
         else:
@@ -319,7 +323,7 @@ class Server:
                 with smtplib.SMTP(host="smtp.ulaval.ca", timeout=10) as connection:
                     connection.send_message(message)
                     return gloutils.GloMessage(header=gloutils.Headers.OK, payload=None)
-            except smtplib.SMTPException:
+            except:
                 return self._get_error_message("Échec de l'envoie du courriel.")
     
     def _get_number_of_mail_for_user(self, username: str) -> int:
@@ -339,7 +343,7 @@ class Server:
         elif message["header"] == gloutils.Headers.EMAIL_SENDING:
             response = self._send_email(message["payload"])
         elif message["header"] == gloutils.Headers.BYE:
-            return # No response
+            return self._remove_client(socket)
         elif message["header"] == gloutils.Headers.STATS_REQUEST:
             response = self._get_stats(client_soc=socket)
         elif message["header"] == gloutils.Headers.INBOX_READING_REQUEST:

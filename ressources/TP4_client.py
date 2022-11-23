@@ -1,9 +1,9 @@
 """\
 GLO-2000 Travail pratique 4 - Client
 Noms et numéros étudiants:
--
--
--
+- Alec Lévesque 111 269 901
+- Joey Fournier 111 267 602
+- Zyed El Hidri 111 159 762
 """
 
 import argparse
@@ -45,10 +45,13 @@ class Client:
         Prépare un attribut `_username` pour stocker le nom d'utilisateur
         courant. Laissé vide quand l'utilisateur n'est pas connecté.
         """
-        self._username = None
+        try:
+            self._username = None
 
-        self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self._socket.connect((destination, gloutils.APP_PORT))
+            self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self._socket.connect((destination, gloutils.APP_PORT))
+        except:
+            sys.exit(-1)
 
     def _message_contains_error(self, message: gloutils.GloMessage) -> bool:
         if message["header"] == gloutils.Headers.ERROR:
@@ -70,7 +73,6 @@ class Client:
         """
         username, password = self._get_username_password()
 
-        self._username = username
         payload = gloutils.AuthPayload(username=username, password=password)
         message = gloutils.GloMessage(header=gloutils.Headers.AUTH_REGISTER, payload=payload)
 
@@ -191,7 +193,7 @@ class Client:
             if line == ".":
                 break
             else:
-                body += line
+                body += line + "\n"
         
         payload = gloutils.EmailContentPayload(
             sender=self._username+"@glo2000.ca",
