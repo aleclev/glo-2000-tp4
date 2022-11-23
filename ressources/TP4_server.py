@@ -1,9 +1,9 @@
 """\
 GLO-2000 Travail pratique 4 - Serveur
 Noms et numéros étudiants:
--
--
--
+- Alec Lévesque 111 269 901
+- Joey Fournier 111 267 602
+- Zyed El Hidri 111 159 762
 """
 
 from email.message import EmailMessage
