@@ -68,10 +68,11 @@ class Client:
 
         message_rec = self._exchange_to_server(message=message)
 
-        if message_rec.header == gloutils.Headers.ERROR:
-            print(message_rec.payload.error_message)
-        elif message_rec.header == gloutils.Headers.OK:
+        if message_rec["header"] == gloutils.Headers.ERROR:
+            print(message_rec["payload"]["error_message"])
+        elif message_rec["header"] == gloutils.Headers.OK:
             self._username = username
+            print("Connexion réussie !")
         else:
             print("Erreur dans le traitement du message reçu.")
 
@@ -85,13 +86,15 @@ class Client:
         """
         username, password = self._get_username_password()
 
-        message = gloutils.AuthPayload(username=username, password=password)
-        
+        payload = gloutils.AuthPayload(username=username, password=password)
+        header = gloutils.Headers.AUTH_LOGIN
+        message = gloutils.GloMessage(payload=payload, header=header)
+
         message_rec = self._exchange_to_server(message)
 
-        if message_rec.header == gloutils.Headers.ERROR:
-            print(message_rec.payload.error_message)
-        elif message_rec.header == gloutils.Headers.OK:
+        if message_rec["header"] == gloutils.Headers.ERROR:
+            print(message_rec['payload']["error_message"])
+        elif message_rec["header"] == gloutils.Headers.OK:
             self._username = username
         else:
             print("Erreur dans le traitement du message reçu.")
@@ -177,24 +180,24 @@ class Client:
             if line == ".":
                 break
             else:
-                body += input()
+                body += line
         
         payload = gloutils.EmailContentPayload(
-            sender=self._username,
+            sender=self._username+"@glo2000.ca",
             destination=email,
             subject=subject,
-            date=gloutils.get_current_utc_time,
+            date=gloutils.get_current_utc_time(),
             content=body)
 
         message = gloutils.GloMessage(header=gloutils.Headers.EMAIL_SENDING, payload=payload)
-        message_rec = self._exchange_to_server(message)
+        message_rec = self._exchange_to_server(message=message)
 
-        header = message_rec.header
+        header = message_rec["header"]
 
         if header == gloutils.Headers.OK:
             print("Envoi du message réussit!")
         elif header == gloutils.Headers.ERROR:
-            print(message_rec.payload.error_message)
+            print(message_rec["payload"]["error_message"])
         else:
             print("Erreur dans le traitement du message reçu.")
         
@@ -241,6 +244,7 @@ class Client:
 
     def _authentication_menu(self) -> bool:
         """Returns true if the program should quit."""
+        print(f"Connecté à {self._username}")
         print(gloutils.CLIENT_AUTH_CHOICE)
 
         choice = self._get_input_number_between(min=1, max=3)

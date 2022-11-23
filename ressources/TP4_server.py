@@ -39,7 +39,10 @@ class Server:
         """
         self._server_socket = self._make_socket()
         self._client_socs = []
-        self._logged_users = []
+        self._logged_users = {}
+
+        path = pathlib.Path.cwd() / gloutils.SERVER_DATA_DIR / gloutils.SERVER_LOST_DIR
+        path.mkdir(parents=True, exist_ok=True)
 
     def _make_socket(self):
         soc = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -63,6 +66,13 @@ class Server:
     def _remove_client(self, client_soc: socket.socket) -> None:
         """Retire le client des structures de données et ferme sa connexion."""
 
+        self._client_socs.remove(client_soc)
+        
+        if id(client_soc) in self._logged_users:
+            self._logged_users.pop(id(client_soc))
+        
+        client_soc.close()
+
     def _create_account(self, client_soc: socket.socket,
                         payload: gloutils.AuthPayload
                         ) -> gloutils.GloMessage:
@@ -77,19 +87,16 @@ class Server:
         password = payload["password"]
 
         username_pattern = re.compile(r"^[\w_\.-]+")
-        password_pattern = re.compile(r"^(?=.*?[A-Z])(?=.*?[a-z])(?=.*?[0-9])(?=.*?[#?!@$%^&*-]).{8,}$")
+        password_pattern = re.compile(r"^(?=.*?[A-Z])(?=.*?[a-z])(?=.*?[0-9]).{10,}$")
 
-        if not username_pattern.fullmatch(username):
-            #username invalid
-            pass
+        if (not username_pattern.fullmatch(username)) or username.lower() == "lost":
+            return self._get_error_message("Le nom d'utilisateur doit être composé de caractères alpha numériques et ., - ou _.")
+
         if not password_pattern.fullmatch(password):
-            #password invalid
-            pass
+            return self._get_error_message("Le mot de passe doit contenir une lettre majuscule et une lettre minuscule. Doit aussi contenir au moins 10 caractères.")
         
         #create folder if not exists
         path = pathlib.Path.cwd() / gloutils.SERVER_DATA_DIR
-        
-        path.mkdir(parents=True, exist_ok=True)
 
         for x in path.iterdir(): 
             if x.is_dir() and x.name == username.lower():
@@ -106,11 +113,20 @@ class Server:
 
         hasher = hashlib.sha3_512()
 
-        encoded_pass = hasher.update(password.encode("utf-8"))
+        hasher.update(password.encode("utf-8"))
+        encoded_pass = hasher.hexdigest()
 
-        path.write_text(password)
-                
-        return gloutils.GloMessage()
+        path.write_text(encoded_pass)
+        self._logged_users[id(client_soc)] = username.lower()
+
+        header = gloutils.Headers.OK
+        return gloutils.GloMessage(header=header, payload=None)
+    
+    def _get_error_message(self, message: str):
+        payload = gloutils.ErrorPayload(error_message=message)
+        header = gloutils.Headers.ERROR
+        message = gloutils.GloMessage(payload=payload, header=header)
+        return message
 
     def _login(self, client_soc: socket.socket, payload: gloutils.AuthPayload
                ) -> gloutils.GloMessage:
@@ -120,10 +136,42 @@ class Server:
         Si les identifiants sont valides, associe le socket à l'utilisateur et
         retourne un succès, sinon retourne un message d'erreur.
         """
-        return gloutils.GloMessage()
+
+        path = pathlib.Path.cwd() / gloutils.SERVER_DATA_DIR
+        
+        username = payload["username"]
+        password = payload["password"]
+
+        stored_password = None
+
+        for x in path.iterdir(): 
+            if x.is_dir() and x.name == username.lower():
+                with open(path / username.lower() / gloutils.PASSWORD_FILENAME, 'r') as password_file:
+                    stored_password = password_file.read()
+        
+        if stored_password == None:
+            return self._get_error_message("L'utilisateur n'existe pas.")
+        
+        hasher = hashlib.sha3_512()
+        hasher.update(password.encode("utf-8"))
+        digest = hasher.hexdigest()
+
+        if hmac.compare_digest(digest, stored_password):
+            self._logged_users[id(client_soc)] = username.lower()
+            header = gloutils.Headers.OK
+            return gloutils.GloMessage(payload=None, header=header)
+        else:
+            return self._get_error_message("Mot de passe incorrecte.")
+        
 
     def _logout(self, client_soc: socket.socket) -> None:
         """Déconnecte un utilisateur."""
+
+        if id(client_soc) not in self._logged_users:
+            return self._get_error_message("Aucun utilisateur connecté")
+        else:
+            self._logged_users.pop(id(client_soc))
+            return gloutils.GloMessage(header=gloutils.Headers.OK, payload=None)
 
     def _get_email_list(self, client_soc: socket.socket
                         ) -> gloutils.GloMessage:
@@ -165,22 +213,50 @@ class Server:
 
         Retourne un messange indiquant le succès ou l'échec de l'opération.
         """
+        sender = payload["sender"]
+        destination = payload["destination"]
+        subject = payload["subject"]
+        date = payload["date"]
+        content = payload["content"]
+        
+        if destination.endswith("@glo2000.ca"):
+            #interne
+            pass
+        else:
+            #extrerne
+            message = EmailMessage()
+            message["From"] = sender
+            message["To"] = destination
+            message["Subject"] = subject
+            message.set_content(content)
+
+            try:
+                with smtplib.SMTP(host="smtp.ulaval.ca", timeout=10) as connection:
+                    connection.send_message(message)
+                    return gloutils.GloMessage(header=gloutils.Headers.OK, payload=None)
+            except smtplib.SMTPException:
+                return self._get_error_message("Échec de l'envoie du courriel.")
+
+
         return gloutils.GloMessage()
 
     def _dispatch(self, message: gloutils.GloMessage, socket: glosocket.socket):
         
+        response = None
+
         if message["header"] == gloutils.Headers.AUTH_LOGIN:
-            pass
-        if message["header"] == gloutils.Headers.AUTH_LOGOUT:
-            pass
-        if message["header"] == gloutils.Headers.AUTH_REGISTER:
-            self._create_account(socket, message["payload"])
-        if message["header"] == gloutils.Headers.EMAIL_SENDING:
-            pass
-        if message["header"] == gloutils.Headers.ERROR:
-            pass
-        if message["header"] == gloutils.Headers.INBOX_READING_CHOICE:
-            pass
+            response = self._login(socket, message["payload"])
+        elif message["header"] == gloutils.Headers.AUTH_LOGOUT:
+            response = self._logout(socket)
+        elif message["header"] == gloutils.Headers.AUTH_REGISTER:
+            response = self._create_account(socket, message["payload"])
+        elif message["header"] == gloutils.Headers.EMAIL_SENDING:
+            response = self._send_email(message["payload"])
+        elif message["header"] == gloutils.Headers.BYE:
+            return # No response
+
+        raw = json.dumps(response)
+        glosocket.send_msg(socket, message=raw)
 
     def run(self):
         """Point d'entrée du serveur."""
