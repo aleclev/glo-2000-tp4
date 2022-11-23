@@ -15,6 +15,8 @@ import select
 import smtplib
 import socket
 import sys
+import re
+import pathlib
 
 import glosocket
 import gloutils
@@ -71,6 +73,43 @@ class Server:
         associe le socket au nouvel l'utilisateur et retourne un succès,
         sinon retourne un message d'erreur.
         """
+        username = payload["username"]
+        password = payload["password"]
+
+        username_pattern = re.compile(r"^[\w_\.-]+")
+        password_pattern = re.compile(r"^(?=.*?[A-Z])(?=.*?[a-z])(?=.*?[0-9])(?=.*?[#?!@$%^&*-]).{8,}$")
+
+        if not username_pattern.fullmatch(username):
+            #username invalid
+            pass
+        if not password_pattern.fullmatch(password):
+            #password invalid
+            pass
+        
+        #create folder if not exists
+        path = pathlib.Path.cwd() / gloutils.SERVER_DATA_DIR
+        
+        path.mkdir(parents=True, exist_ok=True)
+
+        for x in path.iterdir(): 
+            if x.is_dir() and x.name == username.lower():
+                #error
+                return
+        
+        path = path / username.lower()
+
+        path.mkdir(parents=True, exist_ok=True)
+
+        path = path / gloutils.PASSWORD_FILENAME
+
+        path.touch(exist_ok=True)
+
+        hasher = hashlib.sha3_512()
+
+        encoded_pass = hasher.update(password.encode("utf-8"))
+
+        path.write_text(password)
+                
         return gloutils.GloMessage()
 
     def _login(self, client_soc: socket.socket, payload: gloutils.AuthPayload
@@ -129,17 +168,18 @@ class Server:
         return gloutils.GloMessage()
 
     def _dispatch(self, message: gloutils.GloMessage, socket: glosocket.socket):
-        if message.header == gloutils.Headers.AUTH_LOGIN:
+        
+        if message["header"] == gloutils.Headers.AUTH_LOGIN:
             pass
-        if message.header == gloutils.Headers.AUTH_LOGOUT:
+        if message["header"] == gloutils.Headers.AUTH_LOGOUT:
             pass
-        if message.header == gloutils.Headers.AUTH_REGISTER:
+        if message["header"] == gloutils.Headers.AUTH_REGISTER:
+            self._create_account(socket, message["payload"])
+        if message["header"] == gloutils.Headers.EMAIL_SENDING:
             pass
-        if message.header == gloutils.Headers.EMAIL_SENDING:
+        if message["header"] == gloutils.Headers.ERROR:
             pass
-        if message.header == gloutils.Headers.ERROR:
-            pass
-        if message.header == gloutils.Headers.INBOX_READING_CHOICE:
+        if message["header"] == gloutils.Headers.INBOX_READING_CHOICE:
             pass
 
     def run(self):

@@ -64,13 +64,13 @@ class Client:
 
         self._username = username
         payload = gloutils.AuthPayload(username=username, password=password)
-        message = gloutils.GloMessage(headers=gloutils.Headers.AUTH_REGISTER, payload=payload)
+        message = gloutils.GloMessage(header=gloutils.Headers.AUTH_REGISTER, payload=payload)
 
         message_rec = self._exchange_to_server(message=message)
 
-        if message_rec.headers == gloutils.Headers.ERROR:
+        if message_rec.header == gloutils.Headers.ERROR:
             print(message_rec.payload.error_message)
-        elif message_rec.headers == gloutils.Headers.OK:
+        elif message_rec.header == gloutils.Headers.OK:
             self._username = username
         else:
             print("Erreur dans le traitement du message reçu.")
@@ -89,9 +89,9 @@ class Client:
         
         message_rec = self._exchange_to_server(message)
 
-        if message_rec.headers == gloutils.Headers.ERROR:
+        if message_rec.header == gloutils.Headers.ERROR:
             print(message_rec.payload.error_message)
-        elif message_rec.headers == gloutils.Headers.OK:
+        elif message_rec.header == gloutils.Headers.OK:
             self._username = username
         else:
             print("Erreur dans le traitement du message reçu.")
@@ -104,7 +104,7 @@ class Client:
         socket du client.
         """
 
-        message = gloutils.GloMessage(payload=None, headers=gloutils.Headers.BYE)
+        message = gloutils.GloMessage(payload=None, header=gloutils.Headers.BYE)
         self._send_server_message(message)
         print("Déconnexion. Au revoir !")
 
@@ -121,7 +121,7 @@ class Client:
         S'il n'y a pas de courriel à lire, l'utilisateur est averti avant de
         retourner au menu principal.
         """
-        message = gloutils.GloMessage(headers=gloutils.Headers.INBOX_READING_REQUEST, payload=None)
+        message = gloutils.GloMessage(header=gloutils.Headers.INBOX_READING_REQUEST, payload=None)
         message_rec = self._exchange_to_server(message)
 
         email_subjects = message_rec.payload.email_list
@@ -141,7 +141,7 @@ class Client:
         choice = input("Veuillez entrer votre choix:")
 
         payload = gloutils.EmailChoicePayload(choice=choice)
-        message = gloutils.GloMessage(headers=gloutils.Headers.INBOX_READING_CHOICE, payload=payload)
+        message = gloutils.GloMessage(header=gloutils.Headers.INBOX_READING_CHOICE, payload=payload)
 
         message_rec = self._exchange_to_server(message=message)
 
@@ -186,10 +186,10 @@ class Client:
             date=gloutils.get_current_utc_time,
             content=body)
 
-        message = gloutils.GloMessage(headers=gloutils.Headers.EMAIL_SENDING, payload=payload)
+        message = gloutils.GloMessage(header=gloutils.Headers.EMAIL_SENDING, payload=payload)
         message_rec = self._exchange_to_server(message)
 
-        header = message_rec.headers
+        header = message_rec.header
 
         if header == gloutils.Headers.OK:
             print("Envoi du message réussit!")
@@ -206,7 +206,7 @@ class Client:
         Affiche les statistiques à l'aide du gabarit `STATS_DISPLAY`.
         """
 
-        message = gloutils.GloMessage(headers=gloutils.Headers.STATS_REQUEST, payload=None)
+        message = gloutils.GloMessage(header=gloutils.Headers.STATS_REQUEST, payload=None)
         message_rec = self._exchange_to_server(message=message)
 
         payload = message_rec.payload
@@ -222,7 +222,7 @@ class Client:
         Met à jour l'attribut `_username`.
         """
 
-        message = gloutils.GloMessage(headers=gloutils.Headers.AUTH_LOGOUT, payload=None)
+        message = gloutils.GloMessage(header=gloutils.Headers.AUTH_LOGOUT, payload=None)
 
         self._send_server_message(message)
 
