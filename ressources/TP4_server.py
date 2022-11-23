@@ -43,7 +43,7 @@ class Server:
         soc = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         soc.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         soc.bind(("127.0.0.1", gloutils.APP_PORT))
-        soc.listen()
+        soc.listen(10)
         return soc
 
     def cleanup(self) -> None:
@@ -54,6 +54,9 @@ class Server:
 
     def _accept_client(self) -> None:
         """Accepte un nouveau client."""
+        newsocket, _ = self._server_socket.accept()
+        
+        self._client_socs.append(newsocket)
 
     def _remove_client(self, client_soc: socket.socket) -> None:
         """Retire le client des structures de données et ferme sa connexion."""
@@ -141,15 +144,17 @@ class Server:
 
     def run(self):
         """Point d'entrée du serveur."""
-        waiters = [self._server_socket]
         while True:
             # Select readable sockets
-            result = select.select(waiters, [], [])
+            result = select.select([self._server_socket] + self._client_socs, [], [])
             readable_sockets = result[0]
             for waiter in readable_sockets:
-                raw = glosocket.recv_msg(waiter)
-                message = json.loads(raw)
-                self._dispatch(message, waiter)
+                if waiter == self._server_socket:
+                    self._accept_client()
+                else:
+                    raw = glosocket.recv_msg(waiter)
+                    message = json.loads(raw)
+                    self._dispatch(message, waiter)
 
 
 def _main() -> int:

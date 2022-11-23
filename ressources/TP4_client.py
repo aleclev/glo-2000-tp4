@@ -48,9 +48,7 @@ class Client:
         self._username = None
 
         self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self._socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self._socket.bind((destination, gloutils.APP_PORT))
-        self._socket.listen()
+        self._socket.connect((destination, gloutils.APP_PORT))
 
     def _register(self) -> None:
         """
@@ -230,7 +228,7 @@ class Client:
 
         self._username = None
 
-    def _get_input_number_between(min: int, max: int) -> int:
+    def _get_input_number_between(self, min: int, max: int) -> int:
         while True:
             try:
                 choice = int(input("Entrer votre choix."))
@@ -239,12 +237,13 @@ class Client:
                 break
             except:
                 print(f"Le choix doît être un nombre de {min} à {max}.")
+        return choice
 
     def _authentication_menu(self) -> bool:
         """Returns true if the program should quit."""
         print(gloutils.CLIENT_AUTH_CHOICE)
 
-        choice = self._get_input_number_between(1, 3)
+        choice = self._get_input_number_between(min=1, max=3)
         
         if (choice == 1):
             self._register()
